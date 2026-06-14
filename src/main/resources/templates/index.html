@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Jactl Playground</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css"/>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg:        #1a1a2e;
+            --panel:     #16213e;
+            --border:    #0f3460;
+            --accent:    #e94560;
+            --text:      #e0e0e0;
+            --muted:     #8892a6;
+            --code-bg:   #0d1117;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        header {
+            background: var(--panel);
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+        header h1 { font-size: 1.25rem; color: var(--accent); font-weight: 700; letter-spacing: 1px; }
+        header .subtitle { font-size: 0.82rem; color: var(--muted); }
+        header a { color: var(--muted); font-size: 0.8rem; margin-left: auto; text-decoration: none; }
+        header a:hover { color: var(--text); }
+
+        .layout { display: flex; flex: 1; overflow: hidden; }
+
+        /* ---------- Sidebar: examples ---------- */
+        .sidebar {
+            width: 270px;
+            min-width: 270px;
+            background: var(--panel);
+            border-right: 1px solid var(--border);
+            overflow-y: auto;
+            padding-bottom: 20px;
+        }
+        .sidebar h2 {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: var(--muted);
+            padding: 14px 16px 6px;
+        }
+        .example-item {
+            padding: 8px 16px 8px 22px;
+            cursor: pointer;
+            font-size: 0.86rem;
+            border-left: 3px solid transparent;
+            transition: background 0.15s;
+        }
+        .example-item:hover { background: rgba(233, 69, 96, 0.08); }
+        .example-item.active { border-left-color: var(--accent); background: rgba(233, 69, 96, 0.12); }
+        .example-item .ex-title { color: var(--text); }
+        .example-item .ex-desc { color: var(--muted); font-size: 0.74rem; margin-top: 2px; line-height: 1.4; }
+
+        /* ---------- Center: editor + output ---------- */
+        .center { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 350px; }
+
+        .explain {
+            background: rgba(15, 52, 96, 0.35);
+            border-bottom: 1px solid var(--border);
+            padding: 10px 16px;
+            font-size: 0.84rem;
+            line-height: 1.55;
+            color: #b8c4d8;
+            max-height: 120px;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+        .explain code {
+            background: var(--code-bg);
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-size: 0.8rem;
+            color: #79c0ff;
+        }
+        .explain strong { color: var(--text); }
+
+        .editor-wrap { flex: 1.3; overflow: hidden; display: flex; flex-direction: column; min-height: 120px; }
+        .editor-wrap .CodeMirror { flex: 1; height: 100%; font-size: 13.5px; line-height: 1.6; }
+
+        .toolbar {
+            background: var(--panel);
+            padding: 8px 16px;
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        button {
+            padding: 7px 18px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.86rem;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        #runBtn { background: var(--accent); color: white; }
+        #runBtn:hover { background: #c73652; }
+        #runBtn:disabled { background: #555; cursor: not-allowed; }
+        #clearBtn { background: var(--border); color: #aab; }
+        #clearBtn:hover { background: #1a4a80; color: white; }
+        .shortcut-hint { font-size: 0.74rem; color: #556; margin-left: auto; }
+
+        .output-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 100px; }
+        .output-header {
+            background: var(--panel);
+            padding: 6px 16px;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--muted);
+            flex-shrink: 0;
+        }
+        #output {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px 16px;
+            font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 12.5px;
+            line-height: 1.65;
+            background: var(--code-bg);
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .out-print   { color: #c9d1d9; }
+        .out-result  { color: #58d68d; }
+        .out-error   { color: #ff7b72; }
+        .out-meta    { color: #6e7681; font-size: 0.74rem; margin-top: 3px; }
+        .out-globals { color: #d2a8ff; font-size: 0.78rem; }
+        .result-block { border-left: 3px solid var(--border); padding-left: 12px; margin-bottom: 14px; }
+        .result-block.success { border-color: #2ea043; }
+        .result-block.error   { border-color: #da3633; }
+        .placeholder { color: #30363d; font-style: italic; }
+
+        /* ---------- Right rail: sandbox docs ---------- */
+        .docs {
+            width: 320px;
+            min-width: 320px;
+            background: var(--panel);
+            border-left: 1px solid var(--border);
+            overflow-y: auto;
+            padding: 16px;
+            font-size: 0.83rem;
+            line-height: 1.6;
+        }
+        .docs h2 {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: var(--muted);
+            margin-bottom: 10px;
+        }
+        .docs h3 { font-size: 0.9rem; color: var(--accent); margin: 16px 0 6px; }
+        .docs p { color: #b8c4d8; margin-bottom: 8px; }
+        .docs ul { margin: 0 0 8px 18px; color: #b8c4d8; }
+        .docs li { margin-bottom: 4px; }
+        .docs code {
+            background: var(--code-bg);
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-size: 0.76rem;
+            color: #79c0ff;
+        }
+        .badge {
+            display: inline-block;
+            font-size: 0.68rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+            margin-right: 4px;
+        }
+        .badge.green { background: rgba(46, 160, 67, 0.2); color: #3fb950; }
+        .badge.red   { background: rgba(218, 54, 51, 0.2); color: #ff7b72; }
+
+        .spinner {
+            display: inline-block;
+            width: 13px; height: 13px;
+            border: 2px solid #555;
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            vertical-align: middle;
+            margin-right: 6px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        @media (max-width: 1100px) { .docs { display: none; } }
+        @media (max-width: 800px)  { .sidebar { display: none; } }
+    </style>
+</head>
+<body>
+<header>
+    <h1>Jactl Playground</h1>
+    <span class="subtitle">Sandboxed scripting for the JVM &mdash; pick an example, edit, run</span>
+    <a href="https://jactl.io" target="_blank" rel="noopener">jactl.io &#8599;</a>
+</header>
+
+<div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+
+    <main class="center">
+        <div class="explain" id="explain"></div>
+        <div class="editor-wrap"><textarea id="editor"></textarea></div>
+        <div class="toolbar">
+            <button id="runBtn">&#9654; Run</button>
+            <button id="clearBtn">Clear</button>
+            <span class="shortcut-hint">Ctrl+Enter / Cmd+Enter to run &middot; 5s timeout &middot; 64KB output cap</span>
+        </div>
+        <div class="output-wrap">
+            <div class="output-header">Output</div>
+            <div id="output"><span class="placeholder">Run a script to see results here. println output, the final expression value, and timing all show up.</span></div>
+        </div>
+    </main>
+
+    <aside class="docs">
+        <h2>Why Jactl is safe to embed</h2>
+        <p>Most embedded languages (Groovy, JS/Nashorn, BeanShell) expose the whole JVM and make you <em>block</em> dangerous things. Jactl inverts this: scripts start with <strong>nothing</strong> and the host opts capabilities <em>in</em>.</p>
+
+        <h3>Blocked by the language itself</h3>
+        <ul>
+            <li><span class="badge red">no</span>Java classes &amp; reflection &mdash; <code>System.exit()</code>, <code>Runtime.exec()</code> simply don't exist</li>
+            <li><span class="badge red">no</span>File / network I/O</li>
+            <li><span class="badge red">no</span>Thread creation or synchronization primitives</li>
+            <li><span class="badge red">no</span>Access to host state except what's passed in</li>
+        </ul>
+        <p>Try it: run <code>System.exit(0)</code> or <code>new java.io.File('/')</code> &mdash; both are compile errors, not runtime checks that could be bypassed.</p>
+
+        <h3>What the host opts in</h3>
+        <ul>
+            <li><span class="badge green">yes</span><strong>Globals</strong> &mdash; this server injects a <code>request</code> map into every run (see the Globals example)</li>
+            <li><span class="badge green">yes</span><strong>Registered functions</strong> &mdash; this server registers <code>serverInfo()</code> and <code>rot13(text)</code> at startup; scripts can call those and nothing else</li>
+        </ul>
+
+        <h3>Host-level guards (this server)</h3>
+        <ul>
+            <li><strong>5s timeout</strong> &mdash; scripts run on a worker pool and are cancelled if they exceed it. The language can't prevent <code>while(true){}</code>, so the host must. Try the "Sandbox: infinite loop" example.</li>
+            <li><strong>64KB output cap</strong> &mdash; a println flood is truncated instead of exhausting memory.</li>
+            <li><strong>Per-request globals</strong> &mdash; each run gets fresh state; scripts can't see each other.</li>
+        </ul>
+
+        <h3>Why this matters</h3>
+        <p>This combination &mdash; capability-based language + host timeouts &mdash; is what makes Jactl suitable for <em>untrusted user scripts</em>: rule engines, customization hooks, report formulas, workflow conditions. Jactl also compiles to JVM bytecode (not interpreted), so hot scripts run at near-Java speed.</p>
+
+        <h3>Suspend / resume</h3>
+        <p>Jactl's party trick: built-in continuations. A registered function can do async work (DB call, HTTP) and the script <em>suspends</em> without blocking a thread, then resumes &mdash; scripts stay simple and synchronous-looking while the host stays non-blocking.</p>
+    </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/groovy/groovy.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/comment/comment.min.js"></script>
+<script>
+/* ================= Examples catalog ================= */
+const EXAMPLES = [
+  { group: 'Language Basics',
+    items: [
+      { id: 'vars', title: 'Variables & types',
+        desc: 'def, typed vars, strings, BigDecimal',
+        explain: 'Jactl is <strong>optionally typed</strong>: use <code>def</code> for dynamic typing or declare <code>int</code>, <code>String</code>, <code>Decimal</code>, etc. for static checking. Note that decimal literals are <strong>BigDecimal</strong> by default — no floating point surprises in financial code. The last expression in a script is its return value.',
+        code: `// Dynamic typing with def
+def name = 'Jactl'
+def version = 2.1       // Decimal (BigDecimal), not double!
+
+// Optional static typing — compiler enforces these
+int count = 42
+String greeting = "Hello, $name $version"
+List things = [1, 'two', [3, 4]]
+Map person = [name: 'Alice', age: 30]
+
+println greeting
+println "count squared = \${count * count}"
+println "0.1 + 0.2 == 0.3 is \${0.1 + 0.2 == 0.3}"   // true! Decimal math
+
+person.age   // last expression = script return value`},
+
+      { id: 'strings', title: 'Strings & regex',
+        desc: 'Interpolation, multiline, =~ matching',
+        explain: 'Double-quoted strings support <code>$var</code> and <code>${expr}</code> interpolation; single-quoted are literal. Regex matching uses <code>=~</code> like Perl/Groovy, with capture groups available as <code>$1</code>, <code>$2</code>… Substitution uses <code>s/pattern/replacement/</code> syntax.',
+        code: `def lang = 'Jactl'
+println "Interpolation: $lang has \${lang.size()} letters"
+
+// Multiline strings
+def poem = """Roses are red,
+$lang is neat,
+embedded scripting
+is hard to beat."""
+println poem
+
+// Regex match with capture groups
+def log = 'ERROR 2025-04-01 disk full'
+if (log =~ /(\\w+) (\\d{4}-\\d{2}-\\d{2}) (.*)/) {
+  println "level=$1 date=$2 msg=$3"
+}
+
+// Substitution
+def s = 'hello world'
+s =~ s/world/jactl/
+s`},
+
+      { id: 'controlflow', title: 'Control flow',
+        desc: 'if/else, while, for, do-until, break/continue',
+        explain: 'Familiar C-family control flow, plus Perl-style <strong>postfix</strong> <code>if</code>/<code>unless</code> and a ternary operator for value selection. Truthiness: <code>0</code>, <code>null</code>, empty strings/lists/maps are false.',
+        code: `// Ternary for value selection
+def x = 17
+def kind = x % 2 == 0 ? 'even' : 'odd'
+println "$x is $kind"
+
+// Classic loops
+for (int i = 1; i <= 5; i++) {
+  if (i == 3) continue
+  println "i = $i"
+}
+
+// while with break
+def n = 1
+while (true) {
+  n *= 2
+  if (n > 100) break
+}
+println "first power of 2 over 100: $n"
+
+// Truthiness
+println 'empty list is falsy' if ![]
+println 'non-empty string is truthy' if 'hi'
+n`},
+
+      { id: 'functions', title: 'Functions & closures',
+        desc: 'Named functions, closures, default params, recursion',
+        explain: 'Functions are declared with <code>def name(params)</code> and support <strong>default parameter values</strong> and recursion. <strong>Closures</strong> use <code>{ params -> body }</code> syntax; a closure with no declared params gets an implicit <code>it</code>. Closures capture their lexical scope and are first-class values.',
+        code: `// Named function with default param
+def greet(String name, String greeting = 'Hello') {
+  "$greeting, $name!"
+}
+println greet('World')
+println greet('Jactl', 'Bonjour')
+
+// Recursion
+def fib(int n) { n <= 2 ? 1 : fib(n-1) + fib(n-2) }
+println "fib(20) = \${fib(20)}"
+
+// Closures — first-class values that capture scope
+def counter = 0
+def increment = { by = 1 -> counter += by }
+increment(); increment(5)
+println "counter = $counter"
+
+// Implicit 'it' parameter
+def doubler = { it * 2 }
+doubler(21)`},
+    ]},
+
+  { group: 'Collections',
+    items: [
+      { id: 'listsmaps', title: 'Lists & maps',
+        desc: 'Literals, indexing, slicing, nested access',
+        explain: 'List literals use <code>[1,2,3]</code>, map literals <code>[key: value]</code> (or <code>[:]</code> for empty). Negative indexes count from the end. The <code>?.</code> safe-navigation operator and <code>?:</code> Elvis operator make null handling painless. Use <code>subList(from, to)</code> to slice.',
+        code: `def nums = [10, 20, 30, 40, 50]
+println nums[0]             // first
+println nums[-1]            // last
+println nums.subList(1, 4)  // slice: [20, 30, 40]
+
+def user = [
+  name: 'Alice',
+  address: [city: 'Sydney', zip: '2000'],
+  tags: ['admin', 'beta']
+]
+println user.address.city          // nested access
+println user.missing?.deeply?.ok   // safe navigation -> null, no NPE
+println user.nickname ?: '(none)'  // Elvis default
+
+// Maps auto-create on assignment ("autovivification")
+def stats = [:]
+stats.requests.today = 42          // creates nested map on the fly
+stats`},
+
+      { id: 'functional', title: 'map / filter / reduce',
+        desc: 'Functional pipelines over collections',
+        explain: 'Collections carry a rich functional API: <code>map</code>, <code>filter</code>, <code>each</code>, <code>reduce</code>, <code>collect</code>, <code>sum</code>, <code>avg</code>, <code>min/max</code>, <code>sort</code>, <code>groupBy</code>, <code>join</code>… Closures passed as the last argument can sit outside the parens. These chain into readable pipelines — and because Jactl compiles to bytecode, they\'re fast.',
+        code: `def orders = [
+  [item: 'widget', qty: 3, price: 2.50],
+  [item: 'gadget', qty: 1, price: 99.99],
+  [item: 'widget', qty: 7, price: 2.50],
+  [item: 'doohickey', qty: 2, price: 12.00],
+]
+
+// Pipeline: total revenue for widgets
+def widgetRevenue = orders.filter{ it.item == 'widget' }
+                          .map{ it.qty * it.price }
+                          .sum()
+println "widget revenue: $widgetRevenue"
+
+// groupBy + transform values (map entries destructure as k, v)
+def byItem = orders.groupBy{ it.item }
+                   .map{ item, list -> [item, list.map{ it.qty }.sum()] }
+println "quantities: $byItem"
+
+// sort with comparator, take top N
+orders.sort{ a, b -> b.price <=> a.price }
+      .map{ "\${it.item} @ \${it.price}" }
+      .join(', ')`},
+
+      { id: 'ranges', title: 'Number iteration',
+        desc: 'n.map / n.each, sequences, sprintf',
+        explain: 'Jactl has no range literal — instead any integer <code>n</code> is directly iterable as <code>0..n-1</code>: <code>5.map{ it }</code> gives <code>[0,1,2,3,4]</code>. Shift with <code>it + 1</code> for 1-based sequences. <code>%</code> is remainder, <code>&lt;=&gt;</code> is the comparison (spaceship) operator, and <code>sprintf</code> handles formatting.',
+        code: `// Numbers iterate as 0..n-1
+println 5.map{ it }            // [0, 1, 2, 3, 4]
+
+// FizzBuzz in one pipeline (1-based via it + 1)
+def fizzbuzz = 20.map{ it + 1 }.map{
+  it % 15 == 0 ? 'FizzBuzz' :
+  it % 3  == 0 ? 'Fizz'     :
+  it % 5  == 0 ? 'Buzz'     : it
+}
+println fizzbuzz.join(' ')
+
+// Primes: n has no divisor in 2..n-1
+def primes = 49.map{ it + 2 }
+               .filter{ n -> (n - 2).map{ it + 2 }.allMatch{ n % it != 0 } }
+println "primes: $primes"
+
+// Multiplication table with sprintf formatting
+5.each{ r ->
+  println 5.map{ c -> sprintf("%4d", (r+1) * (c+1)) }.join()
+}
+primes.size()`},
+    ]},
+
+  { group: 'OO & Pattern Matching',
+    items: [
+      { id: 'classes', title: 'Classes',
+        desc: 'Fields, methods, constructors, named args',
+        explain: 'Jactl supports classes with fields (with defaults), methods, and inheritance via <code>extends</code>. Instantiate with <code>new</code>; <strong>named arguments</strong> work in constructors. Classes compile to real JVM classes.',
+        code: `class Shape {
+  String name = 'shape'
+  def area() { 0 }
+  def describe() { "$name with area \${area()}" }
+}
+
+class Circle extends Shape {
+  Decimal radius
+  def area() { 3.14159 * radius * radius }
+}
+
+class Rect extends Shape {
+  Decimal w
+  Decimal h
+  def area() { w * h }
+}
+
+def shapes = [
+  new Circle(name: 'circle', radius: 2.0),
+  new Rect(name: 'rect', w: 3.0, h: 4.0)
+]
+shapes.each{ println it.describe() }
+shapes.map{ it.area() }.sum()`},
+
+      { id: 'switch', title: 'Switch & destructuring',
+        desc: 'Pattern matching with binding variables',
+        explain: 'Jactl\'s <code>switch</code> does real <strong>pattern matching</strong>: match on types, literals, regexes, and <strong>destructure lists/maps</strong> with binding variables. <code>_</code> is a wildcard; <code>*</code> matches any number of elements. Guards add conditions with <code>if</code>.',
+        code: `def classify(x) {
+  switch (x) {
+    1                  -> 'the number one'
+    String             -> "a string: '$x'"
+    [int, int]         -> "a pair of ints"
+    [_, *]             -> "a list starting with \${x[0]}"
+    [name: _, age: _]  -> "a person record"
+    int if x > 100     -> 'a big int'
+    int                -> 'a small int'
+    default            -> 'something else'
+  }
+}
+
+println classify(1)
+println classify('hello')
+println classify([3, 4])
+println classify([9, 'x', true])
+println classify([name: 'Bob', age: 44])
+println classify(2000)
+println classify(7)
+
+// Destructuring with binding vars
+switch ([1, 2, 3]) {
+  [a, b, c] -> "sum of destructured: \${a + b + c}"
+}`},
+    ]},
+
+  { group: 'Host Integration',
+    items: [
+      { id: 'globals', title: 'Globals from the host',
+        desc: 'Data injected by this Spring server',
+        explain: 'The <strong>only</strong> state a Jactl script can see is what the host passes in as globals. This server injects a <code>request</code> map into every execution (look at <code>ScriptController.java</code>). Each run gets a fresh copy — mutations don\'t leak between requests. Returned globals are shown in the output panel.',
+        code: `// 'request' is injected by ScriptController for every run
+println "I am running for user: \${request.user}"
+println "Server timestamp: \${request.timestamp}"
+
+// Globals are per-request — mutate freely, next run gets a fresh copy
+def age = request.timestamp % 100
+"user=\${request.user} pseudo-age=$age"`},
+
+      { id: 'hostfns', title: 'Host-registered functions',
+        desc: 'serverInfo() and rot13() from Java',
+        explain: 'Scripts cannot call Java. The host can <strong>register</strong> specific functions via <code>Jactl.function().name(…).impl(…).register()</code> — see <code>JactlFunctionsConfig.java</code>. This server registered <code>serverInfo()</code> and <code>rot13(text)</code>. That\'s the entire attack surface a script gets: a capability model, not a blocklist.',
+        code: `// These two functions exist only because the Spring app
+// registered them at startup. Nothing else from Java is callable.
+
+println "Host says: \${serverInfo()}"
+
+def secret = rot13('Uryyb sebz gur WIZ!')
+println "decoded: $secret"
+
+// Round-trip
+rot13(rot13('symmetric!'))`},
+    ]},
+
+  { group: 'Sandbox Demos',
+    items: [
+      { id: 'nojava', title: 'Sandbox: no Java access',
+        desc: 'System/File/Runtime do not exist',
+        explain: 'Run this: it <strong>fails to compile</strong>. There is no <code>System</code>, no <code>File</code>, no <code>Runtime</code>, no <code>Class.forName</code> — Java interop simply isn\'t part of the language. This is stronger than a SecurityManager blocklist because there\'s no API surface to find holes in. Delete lines one at a time to see each fail individually.',
+        code: `// Every line below is a COMPILE error in Jactl —
+// these classes/functions don't exist in the language.
+
+System.exit(0)
+
+// new java.io.File('/etc/passwd').text
+// Runtime.getRuntime().exec('rm -rf /')
+// Thread.start{ while(true){} }
+// Class.forName('java.lang.Runtime')`},
+
+      { id: 'timeout', title: 'Sandbox: infinite loop',
+        desc: 'Hits the host 5s timeout',
+        explain: 'The language can\'t statically prevent unbounded loops (halting problem!), so CPU protection must come from the <strong>host</strong>. This server runs scripts on a worker pool with a <strong>5-second wall-clock timeout</strong> — run this and watch the sandbox kill it. In production you\'d also bound the pool so concurrent hostile scripts can\'t starve real traffic.',
+        code: `// This will spin until the server's 5s timeout cancels it.
+// The request thread is never blocked — scripts run on a
+// separate bounded worker pool.
+
+def i = 0L
+while (true) {
+  i++
+}
+'unreachable'`},
+
+      { id: 'flood', title: 'Sandbox: output flood',
+        desc: 'println spam hits the 64KB cap',
+        explain: 'A hostile script could try to exhaust server memory by printing gigabytes. This server captures output through a <strong>bounded stream</strong> — after 64KB it silently discards the rest and flags the response as truncated. Cheap insurance, often forgotten.',
+        code: `// Try to flood the output buffer — the server caps it at 64KB
+// and marks the response as truncated.
+
+for (int i = 0; i < 100000; i++) {
+  println "spam line $i — aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}
+'done flooding'`},
+
+      { id: 'errors', title: 'Runtime errors',
+        desc: 'Clean errors, not stack traces into the host',
+        explain: 'Runtime failures (divide by zero, null access on a non-safe path, bad casts) surface as <strong>catchable script errors</strong> with line/column info — they never crash the host JVM. Scripts can also handle their own errors with <code>die</code> for deliberate aborts.',
+        code: `// Runtime errors are contained — try each of these:
+
+def x = 10
+def y = 0
+// x / y                      // divide by zero
+
+def m = [a: 1]
+// m.b.c                      // null access -> error w/ location
+
+// die "business rule violated: amount too large"
+
+// Errors thrown inside closures still report useful locations:
+[1, 2, 0, 4].map{ 100 / it }`},
+    ]},
+];
+
+/* ================= Wiring ================= */
+const editor = CodeMirror.fromTextArea(document.getElementById('editor'), {
+    mode: 'groovy',
+    theme: 'dracula',
+    lineNumbers: true,
+    autoCloseBrackets: true,
+    matchBrackets: true,
+    indentUnit: 2,
+    tabSize: 2,
+    lineWrapping: true,
+    extraKeys: {
+        'Ctrl-Enter': runScript,
+        'Cmd-Enter':  runScript,
+        'Ctrl-/':     cm => cm.toggleComment()
+    }
+});
+
+const sidebar = document.getElementById('sidebar');
+const explainEl = document.getElementById('explain');
+
+EXAMPLES.forEach(group => {
+    const h = document.createElement('h2');
+    h.textContent = group.group;
+    sidebar.appendChild(h);
+    group.items.forEach(ex => {
+        const div = document.createElement('div');
+        div.className = 'example-item';
+        div.dataset.id = ex.id;
+        div.innerHTML = `<div class="ex-title">${ex.title}</div><div class="ex-desc">${ex.desc}</div>`;
+        div.addEventListener('click', () => loadExample(ex, div));
+        sidebar.appendChild(div);
+    });
+});
+
+function loadExample(ex, el) {
+    document.querySelectorAll('.example-item').forEach(d => d.classList.remove('active'));
+    el.classList.add('active');
+    explainEl.innerHTML = ex.explain;
+    editor.setValue(ex.code);
+    editor.focus();
+}
+
+// Load first example on startup
+loadExample(EXAMPLES[0].items[0], sidebar.querySelector('.example-item'));
+
+document.getElementById('runBtn').addEventListener('click', runScript);
+document.getElementById('clearBtn').addEventListener('click', () => {
+    document.getElementById('output').innerHTML =
+        '<span class="placeholder">Run a script to see results here.</span>';
+});
+
+async function runScript() {
+    const script = editor.getValue();
+    if (!script.trim()) return;
+
+    const btn = document.getElementById('runBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Running…';
+    const outputEl = document.getElementById('output');
+
+    try {
+        const resp = await fetch('/api/execute', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ script })
+        });
+        const data = await resp.json();
+
+        const block = document.createElement('div');
+        block.className = 'result-block ' + (data.success ? 'success' : 'error');
+
+        let html = '';
+        if (data.output) {
+            html += `<div class="out-print">${esc(data.output)}</div>`;
+        }
+        if (data.success) {
+            html += `<div class="out-result">=&gt; ${esc(data.result)}</div>`;
+        } else {
+            html += `<div class="out-error">✗ ${esc(data.error)}</div>`;
+        }
+        let meta = `${data.elapsedMs}ms`;
+        if (data.outputTruncated) meta += ' · output truncated at 64KB';
+        html += `<div class="out-meta">${meta}</div>`;
+        block.innerHTML = html;
+
+        const ph = outputEl.querySelector('.placeholder');
+        if (ph) ph.remove();
+        outputEl.appendChild(block);
+        outputEl.scrollTop = outputEl.scrollHeight;
+    } catch (err) {
+        const block = document.createElement('div');
+        block.className = 'result-block error';
+        block.innerHTML = `<div class="out-error">Network error: ${esc(err.message)}</div>`;
+        outputEl.appendChild(block);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '&#9654; Run';
+    }
+}
+
+function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>
