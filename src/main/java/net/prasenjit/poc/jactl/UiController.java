@@ -1,4 +1,4 @@
-package com.example.jactl;
+package net.prasenjit.poc.jactl;
 
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;

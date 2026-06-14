@@ -1,4 +1,4 @@
-package com.example.jactl;
+package net.prasenjit.poc.jactl;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

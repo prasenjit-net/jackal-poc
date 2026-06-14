@@ -1,4 +1,4 @@
-package com.example.jactl;
+package net.prasenjit.poc.jactl;
 
 import io.jactl.Jactl;
 import jakarta.annotation.PostConstruct;

@@ -74,14 +74,29 @@ jobs:
           git tag "v${{ steps.next.outputs.version }}"
           git push origin main --tags
 
-      - name: Create GitHub Release
+      - name: Create GitHub Release and attach JAR
         uses: actions/github-script@v7
         with:
           script: |
-            await github.rest.repos.createRelease({
+            const fs   = require('fs');
+            const path = require('path');
+
+            const version = '${{ steps.next.outputs.version }}';
+            const jarName = `jactl-poc-${version}.jar`;
+            const jarPath = path.join('target', jarName);
+
+            const release = await github.rest.repos.createRelease({
               owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag_name: `v${{ steps.next.outputs.version }}`,
-              name:     `v${{ steps.next.outputs.version }}`,
+              repo:  context.repo.repo,
+              tag_name:             `v${version}`,
+              name:                 `v${version}`,
               generate_release_notes: true,
+            });
+
+            await github.rest.repos.uploadReleaseAsset({
+              owner:    context.repo.owner,
+              repo:     context.repo.repo,
+              release_id: release.data.id,
+              name:     jarName,
+              data:     fs.readFileSync(jarPath),
             });
